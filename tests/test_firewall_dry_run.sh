@@ -22,6 +22,9 @@ set -o errexit
 set -o nounset
 set -o errtrace
 set -o pipefail
+shopt -s inherit_errexit
+shopt -s shift_verbose
+export LC_ALL=C
 
 if ! [ "${CI:-}" = "true" ]; then
   printf '%s\n' "$0: These tests are only supposed to run on CI." >&2
