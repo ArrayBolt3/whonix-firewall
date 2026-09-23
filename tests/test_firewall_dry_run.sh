@@ -254,7 +254,12 @@ test_gateway_default() {
   assert_contains "gateway-default" "${f}" "tcp dport 9150 counter accept"
   ## ICMPv6 ND.
   assert_contains "gateway-default" "${f}" "nd-neighbor-solicit"
-  assert_contains "gateway-default" "${f}" "fib saddr . iif oif missing counter drop"
+  ## uRPF: assert PLACEMENT, not mere presence. The file also holds an
+  ## inet nat prerouting chain, so a bare "fib saddr" match would pass even
+  ## if the drop rule landed there; pin the raw-priority filter prerouting
+  ## chain and the rule within it.
+  assert_contains "gateway-default" "${f}" "add chain inet filter prerouting { type filter hook prerouting priority raw; }"
+  assert_contains "gateway-default" "${f}" "add rule inet filter prerouting .*fib saddr . iif oif missing counter drop"
 }
 
 test_gateway_vpn() {
@@ -307,8 +312,11 @@ test_gateway_timesync() {
   ## Transparent proxy rules should NOT be present (skipped in timesync-fail-closed).
   assert_not_contains "gateway-timesync" "${f}" "redirect to :9040"
   ## uRPF anti-spoofing is UNCONDITIONAL: present even in timesync-fail-closed,
-  ## not gated behind the (absent here) redirect rules.
-  assert_contains "gateway-timesync" "${f}" "fib saddr . iif oif missing counter drop"
+  ## not gated behind the (absent here) redirect rules. Assert PLACEMENT, not
+  ## mere presence: the raw-priority filter prerouting chain must exist and the
+  ## drop rule must live in it (not in the inet nat prerouting chain).
+  assert_contains "gateway-timesync" "${f}" "add chain inet filter prerouting { type filter hook prerouting priority raw; }"
+  assert_contains "gateway-timesync" "${f}" "add rule inet filter prerouting .*fib saddr . iif oif missing counter drop"
 }
 
 test_gateway_timesync_sdwdate_success() {
@@ -425,7 +433,9 @@ test_host_default() {
   assert_contains "host-default" "${f}" "oifname lo counter accept"
   assert_contains "host-default" "${f}" "nd-neighbor-solicit"
   assert_contains "host-default" "${f}" "counter reject"
-  assert_contains "host-default" "${f}" "fib saddr . iif oif missing counter drop"
+  ## uRPF: assert PLACEMENT, not mere presence (see gateway-default).
+  assert_contains "host-default" "${f}" "add chain inet filter prerouting { type filter hook prerouting priority raw; }"
+  assert_contains "host-default" "${f}" "add rule inet filter prerouting .*fib saddr . iif oif missing counter drop"
 }
 
 test_host_vpn() {
