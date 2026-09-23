@@ -368,9 +368,15 @@ nft_prerouting_antispoof_gateway() {
   ## server over clearnet. Note that such an attack is not known to work even
   ## when this configuration is missing.
   ${nftables_cmd} "add chain inet filter prerouting { type filter hook prerouting priority raw; }"
-  local int_if_item
-  for int_if_item in ${INT_IF}; do
-    ${nftables_cmd} add rule inet filter prerouting iifname "${int_if_item}" fib saddr . iif oif missing counter drop
+  ## Cover EVERY internal interface that carries a workstation-facing input accept:
+  ## INT_IF (TransPort) and INT_TIF (DnsPort, Control Port Filter Proxy, Socks
+  ## ports, 9152-9229). These are the same interface by default, but differ when a
+  ## VPN tunnel sits between Workstation and Gateway (INT_TIF=tun0); guarding only
+  ## INT_IF would leave the INT_TIF-only accepts taking a forged source with no
+  ## uRPF. Deduplicated so the default INT_IF==INT_TIF yields a single rule.
+  local antispoof_if_item
+  for antispoof_if_item in $(printf '%s\n' ${INT_IF} ${INT_TIF} | sort --unique); do
+    ${nftables_cmd} add rule inet filter prerouting iifname "${antispoof_if_item}" fib saddr . iif oif missing counter drop
   done
 }
 

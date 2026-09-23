@@ -267,6 +267,27 @@ VPN_FIREWALL=1"
   assert_contains "gateway-vpn" "${f}" "oifname tun0 counter accept"
 }
 
+test_gateway_int_tif_urpf() {
+  cleanup_markers
+  set_gateway_marker
+  ## VPN tunnel between Workstation and Gateway: the internal "tunnel" interface
+  ## INT_TIF (which carries the DnsPort / Control Port / Socks accepts) differs
+  ## from INT_IF (TransPort). The uRPF anti-spoof drop must guard BOTH, else a
+  ## forged source arriving on INT_TIF is accepted with no reverse-path check and
+  ## the un-NAT'd reply leaks out the external interface.
+  write_config 'firewall_mode=full
+INT_IF="eth1"
+INT_TIF="tun0"'
+
+  run_test "gateway-int-tif" "whonix-gateway-firewall --dry-run"
+  local f
+  f="${output_dir}/gateway-int-tif.nft"
+  assert_file_not_empty "gateway-int-tif" "${f}"
+  ## uRPF present on the internal interface AND the separate tunnel interface.
+  assert_contains "gateway-int-tif" "${f}" "iifname eth1 fib saddr . iif oif missing counter drop"
+  assert_contains "gateway-int-tif" "${f}" "iifname tun0 fib saddr . iif oif missing counter drop"
+}
+
 test_gateway_timesync() {
   cleanup_markers
   set_gateway_marker
@@ -462,6 +483,7 @@ create_users
 
 test_gateway_default
 test_gateway_vpn
+test_gateway_int_tif_urpf
 test_gateway_timesync
 test_gateway_timesync_sdwdate_success
 test_gateway_socksified_disabled
